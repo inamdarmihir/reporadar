@@ -1,6 +1,6 @@
-# 🚀 GitHub Trending Agent with Langmem
+# 🚀 GitHub Trending Agent with Agno
 
-A production-ready LangGraph agent for discovering GitHub trending repositories using natural language, powered by Claude Sonnet 4.5 and Langmem for long-term memory.
+A production-ready AI agent for discovering GitHub trending repositories using natural language, powered by **Agno Framework** and **Claude Sonnet 4.5**.
 
 ## ✨ Features
 
@@ -10,31 +10,36 @@ A production-ready LangGraph agent for discovering GitHub trending repositories 
 - **🧠 Long-term Memory**: Agent remembers your preferences and search history
 - **💻 Language Filtering**: Filter by any programming language
 - **🎯 Personalized Recommendations**: Get suggestions based on your interests
+- **🚀 Production Ready**: FastAPI server with REST API endpoints
 
 ## 🏗️ Architecture
 
 Built with:
-- **LangGraph**: Agent orchestration and state management
-- **Langmem**: Long-term memory with semantic search
+- **Agno Framework**: Modern Python framework for AI agents
 - **Claude Sonnet 4.5**: Advanced reasoning and natural language understanding
+- **SQLite Storage**: Persistent conversation memory
+- **FastAPI**: High-performance REST API
 - **GitHub Data**: Real-time scraping + REST API integration
 
 ## 📦 Installation
 
 ### Prerequisites
 
-- Python 3.9+
-- Docker (for LangGraph Platform)
-- API Keys: Anthropic, OpenAI
+- Python 3.10+
+- API Keys: Anthropic (required), GitHub Token (optional but recommended)
 
 ### Quick Start
 
-1. **Install LangGraph CLI**:
+1. **Clone the repository**:
 ```bash
-pip install -U "langgraph-cli[inmem]"
+git clone https://github.com/inamdarmihir/reporadar.git
+cd reporadar
 ```
 
-2. **Clone/Download this project**
+2. **Install dependencies**:
+```bash
+pip install -e .
+```
 
 3. **Set up environment variables**:
 ```bash
@@ -42,61 +47,74 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-4. **Run the development server**:
+Required in `.env`:
 ```bash
-langgraph dev
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+GITHUB_TOKEN=your_github_token_here  # Optional but recommended
 ```
 
-The agent will be available at:
-- **API**: http://localhost:2024
-- **LangGraph Studio**: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+4. **Run the agent**:
+```bash
+# Interactive CLI
+python app.py
+
+# Or start the API server
+python api.py
+```
 
 ## 🎮 Usage
-
-### Using LangGraph Studio
-
-1. Open LangGraph Studio (link shown when you run `langgraph dev`)
-2. Start chatting with the agent:
-   - "What are the trending Python repositories today?"
-   - "Find machine learning projects"
-   - "Remember that I prefer Rust and Go"
-   - "Show me hot new repos from this week"
 
 ### Using Python SDK
 
 ```python
-from langgraph_sdk import get_client
+from app import agent
 
-client = get_client(url="http://localhost:2024")
+# Simple query
+response = agent.run("What are the trending Python repositories today?")
+print(response.content)
 
-# Start a conversation
-async for chunk in client.runs.stream(
-    None,  # Threadless run
-    "github_trending_agent",  # Assistant name from langgraph.json
-    input={
-        "messages": [{
-            "role": "user",
-            "content": "What are the trending Python repos?"
-        }]
-    },
-):
-    print(chunk.data)
+# With session memory
+response = agent.run(
+    "Remember that I prefer Rust and Go",
+    session_id="user-123"
+)
+
+# Get personalized recommendations
+response = agent.run(
+    "What's trending that I might like?",
+    session_id="user-123"
+)
 ```
 
 ### Using REST API
 
+Start the server:
 ```bash
-curl -X POST http://localhost:2024/runs/stream \
+python api.py
+```
+
+The API will be available at:
+- **API**: http://localhost:8000
+- **Docs**: http://localhost:8000/docs
+
+Make requests:
+```bash
+curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "assistant_id": "github_trending_agent",
-    "input": {
-      "messages": [{
-        "role": "user",
-        "content": "Find trending Rust projects"
-      }]
-    }
+    "message": "Find trending Rust projects",
+    "session_id": "user-123"
   }'
+```
+
+### Running Examples
+
+```bash
+# Basic usage examples
+python examples/basic_usage.py
+
+# Memory and personalization examples
+python examples/with_memory.py
 ```
 
 ## 🛠️ Available Tools
@@ -124,67 +142,35 @@ Finds recently created popular repositories.
 - `language` (str): Programming language filter (optional)
 - `days` (int): Look back N days (1-30)
 
-### 4. Memory Tools (Langmem)
-- **Preferences**: Stores user preferences, favorite languages, topics
-- **History**: Tracks search history and viewed repositories
-
 ## 📊 Project Structure
 
 ```
 .
-├── langgraph.json          # LangGraph configuration
+├── app.py                  # Main agent implementation
+├── api.py                  # FastAPI server
 ├── pyproject.toml          # Python dependencies
 ├── .env.example            # Environment variables template
 ├── README.md               # This file
-└── src/
-    └── agent.py            # Main agent implementation
+└── examples/
+    ├── basic_usage.py      # Basic usage examples
+    └── with_memory.py      # Memory & personalization examples
 ```
-
-## 🔧 Configuration
-
-### langgraph.json
-
-```json
-{
-  "$schema": "https://langgra.ph/schema.json",
-  "dependencies": ["."],
-  "graphs": {
-    "github_trending_agent": "./src/agent.py:graph"
-  },
-  "env": ".env",
-  "store": {
-    "index": {
-      "embed": "openai:text-embedding-3-small",
-      "dims": 1536
-    }
-  }
-}
-```
-
-Key configurations:
-- **graphs**: Defines the agent entry point
-- **env**: Points to environment variables file
-- **store.index**: Configures semantic search for memory
 
 ## 🧠 Memory System
 
-The agent uses Langmem with two memory namespaces:
+The agent uses Agno's built-in SQLite storage for persistent memory:
+
+### Conversation History
+- Maintains context across multiple interactions
+- Remembers up to 5 previous exchanges per session
+- Session-based isolation for multi-user scenarios
 
 ### User Preferences
-Stores:
+Automatically stores and recalls:
 - Preferred programming languages
 - Topics of interest
-- Experience level
 - Search patterns
-
-### Search History
-Stores:
-- Past queries
-- Viewed repositories
-- Interaction patterns
-- Feedback
-
-Memory is persisted using LangGraph's built-in store with semantic search enabled.
+- Feedback and interactions
 
 ## 💬 Example Conversations
 
@@ -200,7 +186,7 @@ Agent: [Searches and displays relevant ML repositories]
 ### With Memory
 ```
 User: Remember that I prefer Go and Rust for systems programming
-Agent: [Stores preference in memory]
+Agent: I'll remember that you prefer Go and Rust for systems programming!
 
 User: What's trending this week that I might like?
 Agent: [Uses stored preferences to filter and recommend]
@@ -222,87 +208,109 @@ Agent: [Fetches and displays recent popular TypeScript projects]
 
 ### Local Development
 ```bash
-langgraph dev
+# Run agent directly
+python app.py
+
+# Or run API server with auto-reload
+python api.py
 ```
 
 ### Production Deployment
 
-1. **Build Docker image**:
-```bash
-langgraph build -t github-trending-agent:latest
+The agent can be deployed to any platform that supports Python:
+
+**Docker**:
+```dockerfile
+FROM python:3.10-slim
+WORKDIR /app
+COPY . .
+RUN pip install -e .
+CMD ["python", "api.py"]
 ```
 
-2. **Deploy to LangGraph Cloud**:
-```bash
-langgraph deploy
-```
+**Cloud Platforms**:
+- AWS Lambda / ECS
+- Google Cloud Run
+- Azure Container Apps
+- Railway / Render / Fly.io
 
-Or deploy to any Docker-compatible platform.
+## 🔧 Configuration
 
-## 📝 Development
+### Agent Settings
 
-### Run locally without LangGraph Platform
-```bash
-python src/agent.py
-```
+Edit `app.py` to customize:
+- Model selection (Claude, GPT, Gemini, etc.)
+- Temperature and creativity
+- Number of history messages
+- Tool configurations
+- System instructions
 
-### Modify the agent
-Edit `src/agent.py` to:
-- Add new tools
-- Customize system prompt
-- Adjust model parameters
-- Extend memory capabilities
+### API Settings
 
-### Hot reloading
-`langgraph dev` automatically reloads on file changes.
+Edit `api.py` to customize:
+- Port and host
+- CORS settings
+- Rate limiting
+- Authentication
 
 ## 🐛 Troubleshooting
 
-### Issue: "langgraph: command not found"
-**Solution**: Install LangGraph CLI: `pip install -U "langgraph-cli[inmem]"`
+### Issue: "Module 'agno' not found"
+**Solution**: Install dependencies: `pip install -e .`
 
 ### Issue: "API key not found"
-**Solution**: Ensure `.env` file exists with valid API keys
+**Solution**: Ensure `.env` file exists with valid `ANTHROPIC_API_KEY`
 
 ### Issue: "Rate limit exceeded"
 **Solution**: Add GitHub token to `.env` for higher limits (60 → 5000 req/hour)
 
-### Issue: "Module not found"
-**Solution**: Ensure all dependencies are installed: `pip install -e .`
+### Issue: "No trending repositories found"
+**Solution**: GitHub's HTML structure may have changed. Check scraper in `app.py`
 
 ## 📚 Learn More
 
-- **LangGraph Docs**: https://langchain-ai.github.io/langgraph/
-- **LangGraph Platform**: https://docs.langchain.com/langgraph-platform/
-- **Langmem**: https://langchain-ai.github.io/langmem/
+- **Agno Framework**: https://agno.com
+- **Agno Docs**: https://docs.agno.com
 - **Claude API**: https://docs.anthropic.com/
 - **GitHub API**: https://docs.github.com/en/rest
 
-## 🎯 Key LangGraph Concepts
+## 🎯 Key Agno Concepts
 
-### State Management
-The agent uses `MessagesState` for conversation management with automatic message persistence.
+### Agent
+The core `Agent` class handles:
+- Model integration (Claude, GPT, Gemini, etc.)
+- Tool management and execution
+- Memory and state persistence
+- Conversation flow
 
-### Tool Calling
-Tools are decorated with `@tool` and automatically integrated into the agent workflow.
+### Tools
+Functions decorated with `@tool` that the agent can call:
+- Automatically parsed and validated
+- Type-safe with Pydantic
+- Easy to add custom tools
 
-### Conditional Edges
-The graph uses `tools_condition` to dynamically route between agent and tool execution.
+### Storage
+SQLite-based persistent storage:
+- Session management
+- Conversation history
+- User preferences
+- Cross-session memory
 
-### Checkpointing
-`MemorySaver` provides conversation persistence across sessions.
-
-### Memory Store
-LangGraph's built-in store with semantic search for intelligent memory retrieval.
+### Models
+Model-agnostic design:
+- Easy to switch between providers
+- Consistent API across models
+- Support for streaming responses
 
 ## 🤝 Contributing
 
-This is a reference implementation. Feel free to:
+Contributions are welcome! Feel free to:
 - Add more GitHub data sources (GitLab, Bitbucket)
 - Implement code analysis features
 - Add visualization tools
 - Build custom UI
 - Extend memory capabilities
+- Add more tools
 
 ## 📄 License
 
@@ -311,14 +319,16 @@ MIT License - Use freely in your projects!
 ## 🙏 Acknowledgments
 
 - **Anthropic** for Claude
-- **LangChain team** for LangGraph and Langmem
+- **Agno team** for the amazing framework
 - **GitHub** for trending data
 - **Open source community**
 
 ---
 
-**Built with ❤️ using LangGraph Platform**
+**Built with ❤️ using Agno Framework**
 
-For issues or questions, please refer to:
-- [LangGraph Discussions](https://github.com/langchain-ai/langgraph/discussions)
-- [LangChain Discord](https://discord.gg/langchain)
+**Migration from LangGraph to Agno** - v2.0.0
+
+For issues or questions:
+- [GitHub Issues](https://github.com/inamdarmihir/reporadar/issues)
+- [Agno Discord](https://discord.gg/agno)

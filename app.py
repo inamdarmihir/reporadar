@@ -1,22 +1,21 @@
 """
-GitHub Trending Agent - LangGraph Platform Compatible
-Run with: langgraph dev
+GitHub Trending Agent - Agno Framework Implementation
+A production-ready agent for discovering GitHub trending repositories using natural language.
 """
 
-from typing import Annotated, TypedDict, List, Dict, Any
-from langgraph.graph import StateGraph, START, END, MessagesState
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import SystemMessage
-from langchain_core.tools import tool
-from langmem import create_manage_memory_tool, create_search_memory_tool
+from typing import List, Dict, Any
+from agno import Agent, RunResponse
+from agno.models.anthropic import Claude
+from agno.storage.agent.sqlite import SqliteAgentStorage
+from agno.tools import tool
 import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 
 # Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -283,8 +282,8 @@ def get_hot_repos(language: str = "", days: int = 7) -> str:
 # AGENT SETUP
 # ============================================================================
 
-# System prompt
-SYSTEM_PROMPT = """You are an expert GitHub repository discovery assistant with long-term memory capabilities.
+# System instructions
+SYSTEM_INSTRUCTIONS = """You are an expert GitHub repository discovery assistant with long-term memory capabilities.
 
 **Your capabilities:**
 1. Fetch trending repositories (daily/weekly/monthly) across all programming languages
@@ -294,8 +293,8 @@ SYSTEM_PROMPT = """You are an expert GitHub repository discovery assistant with 
 5. Track search history and provide personalized recommendations
 
 **How to help users:**
-- When users express preferences, save them using memory tools
-- Before searching, check memory for relevant context
+- When users express preferences, remember them for future interactions
+- Before searching, consider any relevant context from previous conversations
 - Provide detailed, actionable repository information
 - Suggest related repositories based on their interests
 - Learn from their feedback and refine recommendations
@@ -310,107 +309,51 @@ SYSTEM_PROMPT = """You are an expert GitHub repository discovery assistant with 
 Be helpful, accurate, and personalized in every interaction!"""
 
 
-# State definition
-class State(MessagesState):
-    """Agent state extending MessagesState"""
-    pass
-
-
-# Create tools
-github_tools = [
-    get_trending_repos,
-    search_repos,
-    get_hot_repos,
-]
-
-# Create memory tools with namespaces
-memory_tools = [
-    create_manage_memory_tool(namespace=("user_preferences",)),
-    create_search_memory_tool(namespace=("user_preferences",)),
-    create_manage_memory_tool(namespace=("search_history",)),
-    create_search_memory_tool(namespace=("search_history",)),
-]
-
-# Combine all tools
-all_tools = github_tools + memory_tools
-
-
-# Agent node
-def call_model(state: State, config: dict) -> dict:
-    """Call the LLM with tools"""
-    # Initialize model
-    model = ChatAnthropic(
-        model="claude-sonnet-4-5-20250929",
-        temperature=0.7
+def create_github_agent() -> Agent:
+    """Create and configure the GitHub Trending Agent"""
+    
+    # Initialize agent with Claude Sonnet 4.5
+    agent = Agent(
+        name="GitHub Trending Agent",
+        model=Claude(id="claude-sonnet-4-20250514"),
+        tools=[get_trending_repos, search_repos, get_hot_repos],
+        instructions=SYSTEM_INSTRUCTIONS,
+        storage=SqliteAgentStorage(
+            table_name="github_agent_sessions",
+            db_file="tmp/agent_storage.db"
+        ),
+        add_history_to_messages=True,
+        num_history_responses=5,
+        markdown=True,
+        show_tool_calls=True,
+        debug_mode=False,
     )
     
-    # Bind tools to model
-    model_with_tools = model.bind_tools(all_tools)
-    
-    # Get messages
-    messages = state["messages"]
-    
-    # Add system message if first interaction
-    if len(messages) == 1 or not any(isinstance(m, SystemMessage) for m in messages):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
-    
-    # Invoke model
-    response = model_with_tools.invoke(messages, config)
-    
-    return {"messages": [response]}
+    return agent
 
 
-# Build the graph
-def create_graph():
-    """Create the LangGraph workflow"""
-    workflow = StateGraph(State)
-    
-    # Add nodes
-    workflow.add_node("agent", call_model)
-    workflow.add_node("tools", ToolNode(all_tools))
-    
-    # Add edges
-    workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges(
-        "agent",
-        tools_condition,
-    )
-    workflow.add_edge("tools", "agent")
-    
-    # Compile with memory
-    checkpointer = MemorySaver()
-    return workflow.compile(checkpointer=checkpointer)
-
-
-# Export the graph
-graph = create_graph()
+# Create the agent instance
+agent = create_github_agent()
 
 
 # For local testing
 if __name__ == "__main__":
-    from langchain_core.messages import HumanMessage
+    print("🚀 GitHub Trending Agent - Agno Framework\n")
+    print("=" * 80)
     
-    print("🚀 GitHub Trending Agent - Local Test\n")
-    
-    config = {
-        "configurable": {
-            "thread_id": "test-thread",
-            "user_id": "test-user"
-        }
-    }
-    
+    # Test queries
     test_queries = [
         "What are the trending Python repositories today?",
         "Find machine learning projects",
+        "Show me hot new repos from the last 7 days in Rust",
     ]
     
     for query in test_queries:
-        print(f"👤 User: {query}")
+        print(f"\n👤 User: {query}")
+        print("-" * 80)
         
-        response = graph.invoke(
-            {"messages": [HumanMessage(content=query)]},
-            config=config
-        )
+        # Run the agent
+        response: RunResponse = agent.run(query, stream=False)
         
-        print(f"🤖 Agent: {response['messages'][-1].content}\n")
-        print("-" * 80 + "\n")
+        print(f"🤖 Agent: {response.content}")
+        print("=" * 80)
